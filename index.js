@@ -39,6 +39,27 @@ app.use(cookieParser());
 
 const client = new MongoClient(process.env.MONGODB_URI);
 
+let clientPromise;
+
+async function connectToDatabase(req, res, next) {
+  try {
+    if (!clientPromise) {
+      clientPromise = client.connect();
+    }
+
+    await clientPromise;
+    next();
+  } catch (error) {
+    console.error('MongoDB connection failed:', error.message);
+
+    res.status(500).send({
+      message: 'Database connection failed',
+    });
+  }
+}
+
+app.use(connectToDatabase);
+
 const booksCollection = client.db('booknook').collection('books');
 const borrowsCollection = client.db('booknook').collection('borrows');
 const usersCollection = client.db('booknook').collection('users');
@@ -632,18 +653,23 @@ app.get('/', (req, res) => {
   res.send('BookNook server is running!');
 });
 
-// Connect to MongoDB before starting server
-async function startServer() {
-  try {
-    await client.connect();
-    console.log('You successfully connected to MongoDB!');
+// Start server only in local development
+if (!process.env.VERCEL) {
+  async function startServer() {
+    try {
+      await client.connect();
+      console.log('You successfully connected to MongoDB!');
 
-    app.listen(port, () => {
-      console.log(`BookNook server is listening on port ${port}`);
-    });
-  } catch (error) {
-    console.error('MongoDB connection failed:', error.message);
+      app.listen(port, () => {
+        console.log(`BookNook server is listening on port ${port}`);
+      });
+    } catch (error) {
+      console.error('MongoDB connection failed:', error.message);
+    }
   }
+
+  startServer();
 }
 
-startServer();
+export default app;
+
